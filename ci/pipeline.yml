@@ -113,7 +113,7 @@ jobs:
           run:
             path: /bin/bash
             args:
-            - repo-master/ci/tasks/merge-to-master.sh
+            - repo/ci/tasks/merge-to-master.sh
       - put: repo-master
         resource: membership-repo-master
         params:
