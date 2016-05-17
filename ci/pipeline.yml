@@ -85,6 +85,10 @@ jobs:
             path: sh
             args:
             - repo/ci/tasks/unit.sh
+      - put: membership-tracker
+        params:
+          repos:
+          - membership-repo-master
 
   - name: merge-to-master
     plan:
