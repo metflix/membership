@@ -1,11 +1,22 @@
 ---
 resources:
-  - name: membership-repo
+  - name: membership-tracker
+    type: tracker
+    source:
+      token: {{tracker-token}}
+      project_id: {{tracker-membership-project-id}}
+      tracker_url: https://www.pivotaltracker.com
+  - name: membership-repo-master
     type: git
     source:
       uri: https://github.com/metflix/membership
       branch: master
-  - name: cf
+  - name: membership-repo-dev
+    type: git
+    source:
+      uri: https://github.com/metflix/membership
+      branch: development
+  - name: cf-prod
     type: cf
     source:
       api: {{cf-api}}
@@ -29,10 +40,10 @@ resources:
       repository: {{docker-repo}}
 
 jobs:
-  - name: membership-unit
+  - name: membership-unit-dev
     serial: true
     plan:
-      - get: membership-repo
+      - get: membership-repo-dev
         trigger: true
       - get: m2
       - task: unit
@@ -44,18 +55,70 @@ jobs:
               repository: java
               tag: 8-jdk-alpine
           inputs:
-            - name: membership-repo
+            - name: membership-repo-dev
               path: repo
             - name: m2
           run:
             path: sh
             args:
             - repo/ci/tasks/unit.sh
+  - name: membership-unit-master
+    serial: true
+    plan:
+      - get: membership-repo-master
+        trigger: true
+        passed: [ merge-to-master ]
+      - get: m2
+      - task: unit
+        config:
+          platform: linux
+          image_resource:
+            type: docker-image
+            source:
+              repository: java
+              tag: 8-jdk-alpine
+          inputs:
+            - name: membership-repo-master
+              path: repo
+            - name: m2
+          run:
+            path: sh
+            args:
+            - repo/ci/tasks/unit.sh
+
+  - name: merge-to-master
+    plan:
+      - get: repo
+        resource: membership-repo-dev
+        passed: [ membership-unit-dev ]
+      - get: repo-master
+        resource: membership-repo-master
+      - task: merge-to-master
+        config:
+          platform: linux
+          image_resource:
+            type: docker-image
+            source:
+              repository: getourneau/alpine-bash-git
+          inputs:
+            - name: repo
+            - name: repo-master
+          outputs:
+            - name: out
+          run:
+            path: /bin/bash
+            args:
+            - repo/ci/tasks/merge-to-master.sh
+      - put: repo
+        resource: membership-repo-master
+        params:
+          repository: out
+
   - name: membership-deploy-dev
     plan:
-      - get: membership-repo
+      - get: membership-repo-dev
         trigger: true
-        passed: [ membership-unit ]
+        passed: [ membership-unit-dev ]
       - get: m2
       - task: package
         config:
@@ -66,7 +129,7 @@ jobs:
               repository: java
               tag: 8-jdk-alpine
           inputs:
-            - name: membership-repo
+            - name: membership-repo-dev
               path: repo
             - name: m2
           outputs:
@@ -77,14 +140,13 @@ jobs:
             - repo/ci/tasks/package.sh
       - put: cf-dev
         params:
-          manifest: membership-repo/manifest-dev.yml
+          manifest: membership-repo-dev/manifest-dev.yml
           path: output/app.jar
           current_app_name: membership-metflix-dev
-  - name: membership-deploy
+  - name: membership-deploy-prod
     plan:
-      - get: membership-repo
-        trigger: true
-        passed: [ membership-unit ]
+      - get: membership-repo-master
+        passed: [ membership-unit-master ]
       - get: m2
       - task: package
         config:
@@ -95,7 +157,7 @@ jobs:
               repository: java
               tag: 8-jdk-alpine
           inputs:
-            - name: membership-repo
+            - name: membership-repo-master
               path: repo
             - name: m2
           outputs:
@@ -104,8 +166,8 @@ jobs:
             path: sh
             args:
             - repo/ci/tasks/package.sh
-      - put: cf
+      - put: cf-prod
         params:
-          manifest: membership-repo/manifest.yml
+          manifest: membership-repo-master/manifest.yml
           path: output/app.jar
           current_app_name: membership-metflix
