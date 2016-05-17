@@ -7,3 +7,4 @@ shopt -s dotglob
 mv -f ../repo-master/* ./
 git remote add -f develop ../repo
 git merge --no-edit develop/develop
+git status
