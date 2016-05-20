@@ -63,6 +63,10 @@ jobs:
             path: sh
             args:
             - repo/ci/tasks/unit.sh
+      - put: membership-tracker
+        params:
+          repos:
+          - membership-repo-master
   - name: membership-unit-master
     serial: true
     plan:
@@ -86,10 +90,6 @@ jobs:
             path: sh
             args:
             - repo/ci/tasks/unit.sh
-      - put: membership-tracker
-        params:
-          repos:
-          - membership-repo-master
 
   - name: merge-to-master
     plan:
@@ -151,6 +151,7 @@ jobs:
   - name: membership-deploy-prod
     plan:
       - get: membership-repo-master
+        trigger: true
         passed: [ membership-unit-master ]
       - get: m2
       - task: package
